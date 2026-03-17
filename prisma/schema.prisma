@@ -1,0 +1,349 @@
+// CDL LMS — Prisma Schema
+// Crop Defenders Ltd — Employee Learning Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  EMPLOYEE
+  INSTRUCTOR
+  MANAGER
+  ADMIN
+}
+
+enum CourseType {
+  SCORM
+  PDF
+  VIDEO
+  PPT
+}
+
+enum EnrollmentStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum ComplianceStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+}
+
+// ─────────────────────────────────────────────
+// USERS & DEPARTMENTS
+// ─────────────────────────────────────────────
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  users            User[]
+  userGroups       UserGroup[]
+  complianceRules  ComplianceRule[]
+  announcements    Announcement[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  password     String
+  role         Role     @default(EMPLOYEE)
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  managerId    String?
+  manager      User?   @relation("ManagerToEmployee", fields: [managerId], references: [id])
+  subordinates User[]  @relation("ManagerToEmployee")
+
+  userGroupMembers  UserGroupMember[]
+  enrollments       Enrollment[]
+  pathEnrollments   PathEnrollment[]
+  quizSubmissions   QuizSubmission[]
+  certificates      Certificate[]
+  userPoints        UserPoints?
+  userBadges        UserBadge[]
+  auditLogs         AuditLog[]
+  createdCourses    Course[]         @relation("CourseCreator")
+  createdPaths      LearningPath[]   @relation("PathCreator")
+  announcements     Announcement[]   @relation("AnnouncementCreator")
+}
+
+// ─────────────────────────────────────────────
+// USER GROUPS
+// ─────────────────────────────────────────────
+
+model UserGroup {
+  id           String   @id @default(cuid())
+  name         String
+  createdAt    DateTime @default(now())
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  members      UserGroupMember[]
+}
+
+model UserGroupMember {
+  id          String    @id @default(cuid())
+  userId      String
+  userGroupId String
+  user        User      @relation(fields: [userId], references: [id])
+  userGroup   UserGroup @relation(fields: [userGroupId], references: [id])
+
+  @@unique([userId, userGroupId])
+}
+
+// ─────────────────────────────────────────────
+// COURSES
+// ─────────────────────────────────────────────
+
+model Course {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  type        CourseType
+  fileUrl     String
+  thumbnailUrl String?
+  duration    Int?       // in minutes
+  isPublished Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  createdById String
+  createdBy   User   @relation("CourseCreator", fields: [createdById], references: [id])
+
+  enrollments     Enrollment[]
+  pathCourses     PathCourse[]
+  quiz            Quiz?
+  complianceRules ComplianceRule[]
+  certificates    Certificate[]
+}
+
+// ─────────────────────────────────────────────
+// LEARNING PATHS
+// ─────────────────────────────────────────────
+
+model LearningPath {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  thumbnailUrl String?
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdById String
+  createdBy   User   @relation("PathCreator", fields: [createdById], references: [id])
+
+  pathCourses     PathCourse[]
+  pathEnrollments PathEnrollment[]
+}
+
+model PathCourse {
+  id             String       @id @default(cuid())
+  order          Int
+  learningPathId String
+  courseId       String
+  learningPath   LearningPath @relation(fields: [learningPathId], references: [id])
+  course         Course       @relation(fields: [courseId], references: [id])
+
+  @@unique([learningPathId, courseId])
+  @@unique([learningPathId, order])
+}
+
+// ─────────────────────────────────────────────
+// ENROLLMENTS & PROGRESS
+// ─────────────────────────────────────────────
+
+model Enrollment {
+  id          String           @id @default(cuid())
+  status      EnrollmentStatus @default(NOT_STARTED)
+  progressPct Int              @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  userId   String
+  courseId String
+  user     User   @relation(fields: [userId], references: [id])
+  course   Course @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
+}
+
+model PathEnrollment {
+  id          String           @id @default(cuid())
+  status      EnrollmentStatus @default(NOT_STARTED)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  userId         String
+  learningPathId String
+  user           User         @relation(fields: [userId], references: [id])
+  learningPath   LearningPath @relation(fields: [learningPathId], references: [id])
+
+  @@unique([userId, learningPathId])
+}
+
+// ─────────────────────────────────────────────
+// QUIZZES
+// ─────────────────────────────────────────────
+
+model Quiz {
+  id        String   @id @default(cuid())
+  passMark  Int      @default(70) // percentage
+  createdAt DateTime @default(now())
+
+  courseId  String @unique
+  course    Course @relation(fields: [courseId], references: [id])
+
+  questions       QuizQuestion[]
+  submissions     QuizSubmission[]
+}
+
+model QuizQuestion {
+  id            String   @id @default(cuid())
+  question      String
+  options       Json     // ["Option A", "Option B", "Option C", "Option D"]
+  correctAnswer Int      // index of correct option (0, 1, 2, or 3)
+  order         Int
+  createdAt     DateTime @default(now())
+
+  quizId String
+  quiz   Quiz   @relation(fields: [quizId], references: [id])
+}
+
+model QuizSubmission {
+  id          String   @id @default(cuid())
+  score       Int      // percentage score
+  passed      Boolean
+  answers     Json     // { questionId: selectedAnswer }
+  submittedAt DateTime @default(now())
+
+  userId String
+  quizId String
+  user   User   @relation(fields: [userId], references: [id])
+  quiz   Quiz   @relation(fields: [quizId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// CERTIFICATES
+// ─────────────────────────────────────────────
+
+model Certificate {
+  id        String   @id @default(cuid())
+  issuedAt  DateTime @default(now())
+  fileUrl   String?  // PDF stored in Supabase Storage
+
+  userId   String
+  courseId String
+  user     User   @relation(fields: [userId], references: [id])
+  course   Course @relation(fields: [courseId], references: [id])
+
+  @@unique([userId, courseId])
+}
+
+// ─────────────────────────────────────────────
+// COMPLIANCE / MANDATORY TRAINING
+// ─────────────────────────────────────────────
+
+model ComplianceRule {
+  id          String   @id @default(cuid())
+  isMandatory Boolean  @default(true)
+  deadline    DateTime?
+  createdAt   DateTime @default(now())
+
+  courseId     String
+  departmentId String?
+  course       Course      @relation(fields: [courseId], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// GAMIFICATION
+// ─────────────────────────────────────────────
+
+model Badge {
+  id             String   @id @default(cuid())
+  name           String   @unique
+  description    String?
+  icon           String   // emoji or icon name
+  pointsRequired Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  userBadges UserBadge[]
+}
+
+model UserBadge {
+  id       String   @id @default(cuid())
+  earnedAt DateTime @default(now())
+
+  userId  String
+  badgeId String
+  user    User   @relation(fields: [userId], references: [id])
+  badge   Badge  @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId])
+}
+
+model UserPoints {
+  id        String   @id @default(cuid())
+  points    Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// ANNOUNCEMENTS
+// ─────────────────────────────────────────────
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+
+  createdById  String
+  departmentId String?
+  createdBy    User        @relation("AnnouncementCreator", fields: [createdById], references: [id])
+  department   Department? @relation(fields: [departmentId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOGS
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String   // e.g. "COURSE_CREATED", "USER_ENROLLED"
+  entity    String   // e.g. "Course", "User"
+  entityId  String
+  metadata  Json?    // any extra info
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+}

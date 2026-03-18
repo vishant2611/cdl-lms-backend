@@ -17,15 +17,48 @@ export class EnrollmentsService {
 
   async updateProgress(userId: string, courseId: string, progressPct: number) {
     const status = progressPct >= 100 ? 'COMPLETED' : 'IN_PROGRESS';
-    return this.prisma.enrollment.update({
+    const now = new Date();
+
+    const existing = await this.prisma.enrollment.findUnique({
+      where: { userId_courseId: { userId, courseId } },
+    });
+
+    const enrollment = await this.prisma.enrollment.update({
       where: { userId_courseId: { userId, courseId } },
       data: {
-        progressPct,
+        progressPct: Math.min(100, progressPct),
         status,
-        startedAt: progressPct > 0 ? new Date() : undefined,
-        completedAt: status === 'COMPLETED' ? new Date() : undefined,
+        startedAt: existing?.startedAt || now,
+        completedAt: status === 'COMPLETED' ? now : undefined,
       },
     });
+
+    // Award points on completion
+    if (status === 'COMPLETED' && existing?.status !== 'COMPLETED') {
+      const POINTS_PER_COURSE = 100;
+      await this.prisma.userPoints.upsert({
+        where: { userId },
+        create: { userId, points: POINTS_PER_COURSE },
+        update: { points: { increment: POINTS_PER_COURSE } },
+      });
+
+      // Check and award badges
+      const userPoints = await this.prisma.userPoints.findUnique({ where: { userId } });
+      if (userPoints) {
+        const badges = await this.prisma.badge.findMany({
+          where: { pointsRequired: { lte: userPoints.points } },
+        });
+        for (const badge of badges) {
+          await this.prisma.userBadge.upsert({
+            where: { userId_badgeId: { userId, badgeId: badge.id } },
+            create: { userId, badgeId: badge.id },
+            update: {},
+          });
+        }
+      }
+    }
+
+    return enrollment;
   }
 
   async getMyEnrollments(userId: string) {
@@ -56,5 +89,12 @@ export class EnrollmentsService {
       where: { departmentId, isActive: true },
     });
     return Promise.all(users.map(u => this.enroll(u.id, courseId)));
+  }
+
+  async assignToTeam(managerId: string, courseId: string) {
+    const team = await this.prisma.user.findMany({
+      where: { managerId, isActive: true },
+    });
+    return Promise.all(team.map(u => this.enroll(u.id, courseId)));
   }
 }

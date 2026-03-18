@@ -41,4 +41,10 @@ export class EnrollmentsController {
   assignToDepartment(@Body() body: { departmentId: string; courseId: string }) {
     return this.enrollmentsService.assignToDepartment(body.departmentId, body.courseId);
   }
+
+ @Roles('MANAGER', 'ADMIN')
+ @Post('assign/team')
+ assignToTeam(@Body() body: { courseId: string }, @Request() req) {
+  return this.enrollmentsService.assignToTeam(req.user.sub, body.courseId);
+}
 }

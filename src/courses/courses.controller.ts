@@ -38,9 +38,9 @@ export class CoursesController {
     return this.coursesService.publish(id);
   }
 
-  @Roles('ADMIN')
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.coursesService.remove(id);
-  }
+  @Roles('ADMIN', 'INSTRUCTOR')
+@Delete(':id')
+remove(@Param('id') id: string) {
+  return this.coursesService.remove(id);
+}
 }

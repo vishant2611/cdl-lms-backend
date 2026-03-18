@@ -53,6 +53,16 @@ export class CoursesService {
   }
 
   async remove(id: string) {
-    return this.prisma.course.delete({ where: { id } });
+  // Delete related records first
+  await this.prisma.enrollment.deleteMany({ where: { courseId: id } });
+  await this.prisma.quizSubmission.deleteMany({ 
+    where: { quiz: { courseId: id } } 
+  });
+  await this.prisma.quiz.deleteMany({ where: { courseId: id } });
+  await this.prisma.certificate.deleteMany({ where: { courseId: id } });
+  await this.prisma.complianceRule.deleteMany({ where: { courseId: id } });
+  await this.prisma.pathCourse.deleteMany({ where: { courseId: id } });
+  return this.prisma.course.delete({ where: { id } });
+
   }
 }

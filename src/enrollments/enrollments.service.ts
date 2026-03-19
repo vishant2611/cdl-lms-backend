@@ -18,11 +18,15 @@ export class EnrollmentsService {
   async updateProgress(userId: string, courseId: string, progressPct: number) {
     const status = progressPct >= 100 ? 'COMPLETED' : 'IN_PROGRESS';
     const now = new Date();
-
-    const existing = await this.prisma.enrollment.findUnique({
+    let existing = await this.prisma.enrollment.findUnique({
       where: { userId_courseId: { userId, courseId } },
     });
-
+    // Auto-enroll if not enrolled yet
+    if (!existing) {
+      existing = await this.prisma.enrollment.create({
+        data: { userId, courseId, status: 'NOT_STARTED' },
+      });
+    }
     const enrollment = await this.prisma.enrollment.update({
       where: { userId_courseId: { userId, courseId } },
       data: {

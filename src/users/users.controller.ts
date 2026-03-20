@@ -10,7 +10,7 @@ export class UsersController {
   constructor(private usersService: UsersService) {}
 
   // Admin: get all users
-  @Roles('ADMIN', 'MANAGER')
+  @Roles('ADMIN', 'MANAGER', 'INSTRUCTOR')
   @Get()
   findAll() {
     return this.usersService.findAll();

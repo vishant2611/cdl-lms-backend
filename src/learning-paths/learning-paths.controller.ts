@@ -29,9 +29,9 @@ export class LearningPathsController {
   }
 
   // Get single learning path
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.learningPathsService.findOne(id);
+    @Get(':id')
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.learningPathsService.findOne(id, req.user.role);
   }
 
   // Create learning path (Admin, Instructor, Manager)

@@ -30,7 +30,7 @@ export class LearningPathsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userRole?: string) {
     const path = await this.prisma.learningPath.findUnique({
       where: { id },
       include: {
@@ -39,7 +39,8 @@ export class LearningPathsService {
         _count: { select: { pathEnrollments: true } },
       },
     });
-    if (!path) throw new NotFoundException('Learning path not found');
+     if (!path) throw new NotFoundException('Learning path not found');
+    if (!path.isPublished && userRole === 'EMPLOYEE') throw new NotFoundException('Learning path not found');
     return path;
   }
 
@@ -137,7 +138,7 @@ export class LearningPathsService {
         });
         if (!existing) {
           const enrollment = await this.prisma.pathEnrollment.create({
-            data: { userId, learningPathId: id, status: 'NOT_STARTED' },
+            data: { userId, learningPathId: id, status: 'NOT_STARTED', ...(data.deadline ? { deadline: new Date(data.deadline) } : {}) },
           });
           results.push(enrollment);
         }

@@ -197,6 +197,7 @@ model PathEnrollment {
   status      EnrollmentStatus @default(NOT_STARTED)
   startedAt   DateTime?
   completedAt DateTime?
+  deadline    DateTime?
   createdAt   DateTime         @default(now())
 
   userId         String
